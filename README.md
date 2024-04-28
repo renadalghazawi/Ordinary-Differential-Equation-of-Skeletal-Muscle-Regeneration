@@ -1,1 +1,1 @@
-# ODE-Skeletal-Muscle
+# Ordinary Differential Equation of Skeletal Muscle Regeneration
