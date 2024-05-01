@@ -3,6 +3,7 @@ These are scripts developed to construct a mathematical model of muscle regenera
 
 # Mathematical Derivation of Equations
 Each cell type population is represented by a variable and their change over time is expressed using an ODE. Rates of cell activities, such as their infiltration or coming into existence (influx), transforming into another type (differentiation/polarization), apoptosis or leaving (outflux), and affecting each other (signaling), are determined by rate constants represented by 'c', as well as numbers of cells performing or regulating the activity.
+
 ![image](https://github.com/renadalghazawi/Ordinary-Differential-Equation-of-Skeletal-Muscle-Regeneration/assets/57923969/d608f9e4-217d-489c-8992-76aa9d069ed4)
 
 # Optimization
