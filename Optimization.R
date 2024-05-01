@@ -6,53 +6,62 @@ library(tidyr)
 library(gridExtra)
 
 # Sample dataset structure (replace with scaled single-cell data)
+## Replace NA values with calibrated scRNA-seq time course data 
 data <- data.frame(
   time = c(0, 1, 2, 3.5, 5, 7),
   M1 = c(NA, NA, NA, NA, NA, NA),
   M2 = c(NA, NA, NA, NA, NA, NA),
-  # ... other variables
+  M = c(NA, NA, NA, NA, NA, NA),
+  N = c(NA, NA, NA, NA, NA, NA),
+  QSC = c(NA, NA, NA, NA, NA, NA),
+  ASC = c(NA, NA, NA, NA, NA, NA),
+  Mc = c(NA, NA, NA, NA, NA, NA)
 )
 
-# List of model parameters
-params <- c("c1", "c2", "c3", ... , "c22")  # Replace '...' with all parameter names
+
+# Define parameters from ODE system 
+params <- c("cMd_out", "cNMd", "cN_in", "cN_out", "cM1Nd", "cM_in", "cMM1", "cM_out", "cM1_out", 
+                        "cM2_inhib", "cM2_out", "cQSCN", "cQSCMd", "cASCM2", "cQSC_self", "cASC_pro", "cASC_out",
+                        "cSC_diff", "cMc_fusion", "cMc_out", "cM1M2", "cMn_self")
 
 # Define the ODE model function
 ode_func <- function(time, state, params) {
   with(as.list(c(state, params)), { 
     
     ## Feedback mechanisms
-    QSC_feedback <- ifelse(QSC > 2700, c19 * QSC * (QSC - 2700), 0)
-    Mn_feedback <- ifelse(Mn > 30000, c21 * Mn * (Mn - 30000), 0)
+    QSC_feedback <- ifelse(QSC > 2700, cQSC_self * QSC * (QSC - 2700), 0)
+    Mn_feedback <- ifelse(Mn > 30000, cMn_self * Mn * (Mn - 30000), 0)
     
     ## Immune cells
-    dN <- c1 * Md - c2 * N - c15 * N * Md 
-    dNd <- c15 * N * Md - c3 * M1 * Nd
-    dM <- c4 * N - c5 * M * (Nd + Md) - c16 * M
-    dM1 <- c5 * M * (Nd + Md) - c6 * M1 - (c17 / (c7 + Nd + Md)) * M1
-    dM2 <- M1 * c17 / (c7 + Nd + Md) - c8 * M2
+    dN <- cN_in * Md - cN_out * N - cNMd * N * Md 
+    dNd <- cNMd * N * Md - cM1Nd * M1 * Nd
+    dM <- cM_in * N - cMM1 * M * (Nd + Md) - cM_out * M
+    dM1 <- cMM1 * M * (Nd + Md) - cM1_out * M1 - (cM1M2 / (cM2_inhib + Nd + Md)) * M1
+    dM2 <- M1 * cM1M2 / (cM2_inhib + Nd + Md) - cM2_out * M2
     
     ## MuSCs
-    dQSC <- -c9 * QSC * N - c18 * QSC * Md + c10 * M2 * ASC - QSC_feedback
-    dASC <- c9 * QSC * N + c18 * QSC * Md - c10 * ASC * M2 + c11 * M1 * ASC - M2 * ASC * c12 - c22 * ASC
-    dMc <- c12 * ASC * M2 - c13 * Mc - c20 * Mc
+    dQSC <- -cQSCN * QSC * N - cQSCMd * QSC * Md + cASCM2 * M2 * ASC - QSC_feedback
+    dASC <- cQSCN * QSC * N + cQSCMd * QSC * Md - cASCM2 * ASC * M2 + cASC_pro * M1 * ASC - M2 * ASC * cSC_diff - cASC_out * ASC
+    dMc <- cSC_diff * ASC * M2 - cMc_fusion * Mc - cMc_out * Mc
     
     ## Myonuclei
-    dMn <- c13 * Mc - Mn_feedback
-    dMd <- -c14 * Md * M1 - c15 * N * Md
+    dMn <- cMc_fusion * Mc - Mn_feedback
+    dMd <- -cMd_out * Md * M1 - cNMd * N * Md
     
     return(list(c(dN, dNd, dM, dM1, dM2, dQSC, dASC, dMc, dMn, dMd)))
   })
 }
 
+
 # Initial values and time sequence for the model
-init <- c(N = 0, Nd = 0, M = 0, M1 = 0, M2 = 0, QSC = NA, ASC = 0, Mc = 0, Mn = NA)
-time_seq <- c(0, 1, 2, 3.5, 5, 7)  # Time points of the dataset
+init <- c(N = 0, Nd = 0, M = 0, M1 = 0, M2 = 0, QSC = 2700, ASC = 0, Mc = 0, Mn =0, Md = 30000)
+time_seq <- c(0, 1, 2, 3.5, 5, 7)  # Time points of the experimental dataset
 
 # Define the objective function for optimization
 objective_func <- function(parms) {
   
   # Run the model and calculate the error between model output and data
-  c7 <- 1e-16 # Fixed Param
+  cM2_inhib <- 1e-16 # Fixed Param
   
   # Model fitting 
   modelfit <- ode(y = init, times = time_seq, func = ode_func, parms = params, method = 'lsoda')
@@ -65,8 +74,9 @@ objective_func <- function(parms) {
   errorM2 <- sum(((data$M2 - modelfit$M2) / max(data$M2))^2)
   errorQSC <- sum(((data$QSC - modelfit$QSC) / max(data$QSC))^2)
   errorASC <- sum(((data$ASC - modelfit$ASC) / max(data$ASC))^2)
+  errorMc <- sum(((data$Mc - modelfit$Mc) / max(data$Mc))^2)
   
-  total_error <- errorN + errorM + errorM1 + errorM2 + errorQSC + errorASC
+  total_error <- errorN + errorM + errorM1 + errorM2 + errorQSC + errorASC + errorMc
   return(total_error)
 }
 
