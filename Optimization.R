@@ -163,6 +163,76 @@ plot_grid <- do.call(grid.arrange, c(plots, ncol = 5, nrow = 2))
 print(plot_grid)
 
 
+
+# Assume 'plots' is a list of ggplot objects
+plot_grid <- grid.arrange(grobs = plots, ncol = 2, nrow = 5)
+
+sol <- ode(y = init, times = time_seq, func = ode_func, parms = best_optimized_parms, method = 'lsoda')
+sim_df <- as.data.frame(sol)
+
+micheli <- data.frame(
+  time = c(0, 2, 5, 7),
+  QSC = c(2700, 24, 989, 1161),
+  ASC = c(87, 131, 632, 282),
+  Mc = c(209, 20, 347, 234),
+  N = c(453, 548, 141, 61),
+  M = c(1115, 2432, 1204, 395),
+  M1 = c(1550, 8000, 7624, 2758),
+  M2 = c(3484, 6829, 7000, 3000)
+)
+
+mckellar <- data.frame(
+  time = c(0, 1, 2, 3.5, 5, 7),
+  M = c(1239, 9797, 2466, 1960, 1323, 888),
+  M1 = c(2589, 8237, 8000, 10628, 6399, 2432),
+  M2 = c(930, 3341, 3707, 10350, 7000, 3000),
+  N = c(509, 4500, 272, 129, 98, 77),
+  QSC = c(2700, 136, 19, 616, 1595, 1507),
+  ASC = c(664, 1134, 123, 1309, 1260, 950),
+  Mc = c(66, 40, 16, 900, 611, 741)
+)
+
+library(tidyr)
+library(dplyr)
+library(tidyverse)
+
+library(tidyr)
+library(dplyr)
+
+# Correct usage: passing the actual data frame objects
+deMicheli_long <- pivot_longer(micheli, cols = -time, names_to = "variable", values_to = "micheli_value")
+mckellar_long <- pivot_longer(mckellar, cols = -time, names_to = "variable", values_to = "mckellar_value")
+sim_long <- pivot_longer(sim_df, cols = -time, names_to = "variable", values_to = "simulated_value")
+# Joining De Micheli and McKellar data to simulated data
+joined_data <- left_join(sim_long, deMicheli_long, by = c("time", "variable"))
+joined_data <- left_join(joined_data, mckellar_long, by = c("time", "variable"))
+
+
+
+plots <- lapply(unique(sim_long$variable), function(var) {
+  plot_data <- filter(joined_data, variable == var)
+  
+  ggplot(plot_data, aes(x = time)) +
+    geom_line(aes(y = simulated_value, color = "Simulated"), size = 1) +
+    geom_point(aes(y = mckellar_value, color = "McKellar"), size = 1.5) +
+    geom_point(aes(y = micheli_value, color = "De Micheli"), size = 1.5) +
+    geom_segment(aes(x = time, xend = time, y = simulated_value, yend = mckellar_value), color = "blue", linetype = "dashed", size = 0.75) +
+    geom_segment(aes(x = time, xend = time, y = simulated_value, yend = micheli_value), color = "red", linetype = "dashed", size = 0.75) +
+    labs(title = paste("", var), x = "Time", y = "Value") +
+    scale_color_manual(values = c("Simulated" = "black", "McKellar" = "blue", "De Micheli" = "red")) +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 10),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10),
+          plot.margin = margin(0.1, 0.1, 0.1, 0.1, "lines"),
+          legend.position = "bottom")
+})
+
+plot_grid <- grid.arrange(grobs = plots, ncol = 2, nrow = 5)
+
+# Print the combined plot grid
+print(plot_grid)
+
 library(tidyr)
 library(dplyr)
 
@@ -200,7 +270,4 @@ plots <- lapply(unique(sim_long$variable), function(var) {
       legend.position = "bottom"
     )
 })
-
-# Assume 'plots' is a list of ggplot objects
-plot_grid <- grid.arrange(grobs = plots, ncol = 2, nrow = 5)
 
